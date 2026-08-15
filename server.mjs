@@ -13,13 +13,14 @@
 import http from 'node:http'
 import { promises as fs, createReadStream, existsSync } from 'node:fs'
 import { join, normalize, dirname } from 'node:path'
-import { execFile } from 'node:child_process'
+import { exec as execCb, execFile as execFileCb } from 'node:child_process'
 import { promisify } from 'node:util'
 import crypto from 'node:crypto'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const exec = promisify(execFile)
+const execFile = promisify(execFileCb)
+const execSh = promisify(execCb)
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PUBLIC = join(HERE, 'public')
 const CACHE = join(HERE, 'cache')
@@ -248,19 +249,72 @@ async function translateLong(text, target = 'zh-CN') {
 /* ═══════════ 本地安装 ═══════════ */
 const cloneDir = (owner, repo) => join(DOWNLOADS, `${owner}__${repo}`)
 
+/**
+ * git 执行封装：
+ *  - 先探测 git 是否可用（直接执行；Windows 上若为 .cmd/执行别名则退回 shell 模式）
+ *  - 失败时把 spawn 类错误（ENOENT/EPERM/EACCES）转成用户可读的中文提示
+ */
+let gitMode = null // 'direct' | 'shell' | null（不可用）
+async function detectGit() {
+  if (gitMode) return gitMode
+  try {
+    await execFile('git', ['--version'], { timeout: 15000 })
+    gitMode = 'direct'
+  } catch {
+    try {
+      await execSh('git --version', { shell: true, timeout: 15000 })
+      gitMode = 'shell'
+    } catch {
+      gitMode = null
+    }
+  }
+  return gitMode
+}
+
+async function runGit(args) {
+  const mode = await detectGit()
+  if (!mode) {
+    const err = new Error('未找到可用的 git 命令：请先安装 Git（https://git-scm.com/downloads）并加入 PATH，然后重启市场服务。')
+    err.status = 500
+    throw err
+  }
+  try {
+    if (mode === 'shell') {
+      const cmd = 'git ' + args.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(' ')
+      await execSh(cmd, { shell: true, timeout: 180000 })
+    } else {
+      await execFile('git', args, { timeout: 180000 })
+    }
+  } catch (e) {
+    // 进程级错误（spawn 失败）与 git 业务错误（exit code 数字）区分开
+    if (typeof e.code === 'string' && ['ENOENT', 'EPERM', 'EACCES'].includes(e.code)) {
+      const hint = e.code === 'ENOENT'
+        ? '未找到 git 命令：请安装 Git for Windows（https://git-scm.com/downloads）后重启市场服务。'
+        : `git 进程被系统拒绝（${e.code}）。Windows 上请检查：`
+          + '① 开始菜单搜索"管理应用执行别名"，关闭 git 条目（Microsoft Store 的 git 是占位程序，无法被直接调用），改装官方 Git for Windows；'
+          + '② 杀毒软件/Windows Defender 是否拦截了 git 或 node 启动子进程；'
+          + '③ 确认以普通用户身份运行，未以管理员/受限账户运行。'
+      const err = new Error(hint)
+      err.status = 500
+      throw err
+    }
+    throw e
+  }
+}
+
 async function ensureCloned(owner, repo) {
   const dir = cloneDir(owner, repo)
   const url = `https://github.com/${owner}/${repo}.git`
   if (existsSync(join(dir, '.git'))) {
     try {
-      await exec('git', ['-C', dir, 'pull', '--ff-only', '--quiet'], { timeout: 120000 })
+      await runGit(['-C', dir, 'pull', '--ff-only', '--quiet'])
       return { dir, action: 'updated' }
     } catch {
       await fs.rm(dir, { recursive: true, force: true })
     }
   }
   await fs.mkdir(DOWNLOADS, { recursive: true })
-  await exec('git', ['clone', '--depth', '1', url, dir], { timeout: 180000 })
+  await runGit(['clone', '--depth', '1', url, dir])
   return { dir, action: 'cloned' }
 }
 
