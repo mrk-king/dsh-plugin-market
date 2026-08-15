@@ -474,48 +474,20 @@ function unsubscribeMux(sessionId, res) {
   if (set.size === 0) muxSubs.delete(sessionId)
 }
 
-/** 候选插件压缩为给智能体的 JSON */
-function candidatesJson(items) {
-  return items.slice(0, 25).map((r) => ({
-    repo: r.full_name,
-    desc: (r.description || '').slice(0, 120),
-    stars: r.stargazers_count,
-    topics: (r.topics || []).slice(0, 5),
-  }))
-}
-
 async function chatSend(sessionId, text) {
-  let candidates = []
-  try {
-    const [hot, kw] = await Promise.all([
-      searchPlugins('').catch(() => null),
-      searchPlugins(text).catch(() => null),
-    ])
-    const seen = new Set()
-    for (const list of [hot, kw]) {
-      for (const item of list?.items ?? []) {
-        if (seen.has(item.full_name)) continue
-        seen.add(item.full_name)
-        candidates.push(item)
-      }
-    }
-  } catch {}
+  // 自由对话：不加候选列表、不加回复格式约束，只告知对话发生的上下文。
+  // 智能体可用自己的工具（如 bash + curl 访问本市场 API）进一步检索插件。
   const composed = [
-    '[插件市场助手模式]',
-    `用户需求：${text}`,
+    '[插件市场] 本对话发生在本地 DSH 插件市场页面。',
     '',
-    '以下是插件市场本次检索到的候选插件（JSON 列表，每项含 repo/desc/stars/topics）：',
-    JSON.stringify(candidatesJson(candidates)),
-    '',
-    '请用中文回复：从候选中筛选出最合适的 1~3 个插件，说明每个的用途和推荐理由；',
-    '如果候选都不匹配，直接说明并给出更合适的搜索关键词。不要编造候选列表之外的仓库。',
+    text,
   ].join('\n')
   const value = await harnessRpc('session.prompt', {
     sessionId,
     mode: 'queue',
     content: [{ type: 'text', text: composed }],
   })
-  return { ok: true, accepted: value?.accepted === true, candidates: candidates.length }
+  return { ok: true, accepted: value?.accepted === true }
 }
 
 /* ═══════════ HTTP 服务 ═══════════ */

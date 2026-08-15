@@ -565,12 +565,12 @@ async function chatSend(text) {
     await localSearchReply(text)
     return
   }
-  $('chat-status').textContent = '已连接本地 Harness，正在筛选'
+  $('chat-status').textContent = '已连接本地 Harness，正在回复'
   chatBusy = true
   try {
     await ensureSession()
     await api('/api/chat/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: chatSessionId, text }) })
-    chatStreamingEl = addMsg('assistant', spinnerHtml() + '正在筛选…')
+    chatStreamingEl = addMsg('assistant', spinnerHtml() + '正在思考…')
     openStream()
   } catch (e) {
     chatBusy = false
@@ -600,7 +600,7 @@ $('chat-toggle').onclick = async () => {
   if (!$('chat').classList.contains('hidden')) {
     const probe = await api('/api/harness').catch(() => ({ connected: false }))
     $('chat-status').textContent = probe.connected
-      ? `已连接本地 Harness（${probe.url}），把需求交给它从候选中筛选`
+      ? `已连接本地 Harness（${probe.url}），自由对话即可`
       : '未连接本地 Harness，将回退为本地关键词检索'
   }
 }
