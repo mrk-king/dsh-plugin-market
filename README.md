@@ -22,10 +22,22 @@
 
 ## 快速开始
 
+### 系统要求
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| [Node.js](https://nodejs.org/) | ≥ 20 | 运行市场服务（需支持 `--experimental-websocket`，Node 20/22 均可） |
+| [Git](https://git-scm.com/downloads) | ≥ 2.30 | 下载/安装插件使用；必须能被命令行调用（`git --version` 有输出） |
+
+**Windows 注意事项：**
+- 请安装**官方 Git for Windows**，不要使用 Microsoft Store 的 Git（"执行别名"占位程序无法被程序直接调用，会导致安装失败）
+- 若点击"下载/安装"报 `spawn EPERM`：多为杀毒软件（360/火绒/电脑管家等）拦截了 Node 启动 git 子进程——将 `node.exe` 与 `git.exe` 加入杀软白名单，或在杀软中放行该目录
+- 服务在 PowerShell / cmd 中运行即可，无需管理员权限
+
 ```sh
 # 克隆后直接启动（无任何依赖需要安装）
 node --experimental-websocket server.mjs
-# 或使用启动脚本（自动打开浏览器）
+# 或使用启动脚本（自动打开浏览器，Linux/macOS）
 ./start.sh
 ```
 
