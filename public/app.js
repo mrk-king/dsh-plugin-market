@@ -48,17 +48,28 @@ async function api(path, opts) {
 const fmtTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false })
 
 /* ── Markdown 渲染(marked + DOMPurify)─────────────────────────────────
-   手写迷你渲染器会转义 README 中的原生 HTML(如 <h1>/<table>/<img>),
-   导致 HTML 风格 README 显示成源码墙。改用标准渲染器:
-   marked 负责 GFM + HTML 透传,DOMPurify 负责消毒(README 来自第三方,
-   必须 sanitize 后再进 innerHTML)。输出保持与旧渲染器相同的语义标签。 */
-function md(src) {
+    marked 负责 GFM + HTML 透传,DOMPurify 负责消毒(README 来自第三方,
+   必须 sanitize 后再进 innerHTML)。imgBase/linkBase 用于把 README 中的
+   相对路径图片/链接补全为 GitHub 原始地址。 */
+function md(src, imgBase, linkBase) {
   if (!src) return '<p class="empty">无内容</p>'
   const html = marked.parse(src, { gfm: true })
   const safe = DOMPurify.sanitize(html)
   const tmp = document.createElement('div')
   tmp.innerHTML = safe
-  tmp.querySelectorAll('img').forEach((img) => { img.loading = 'lazy' })
+  tmp.querySelectorAll('img').forEach((img) => {
+    img.loading = 'lazy'
+    const raw = img.getAttribute('src') || ''
+    if (imgBase && raw && !/^(https?:|data:|#|\/)/i.test(raw)) {
+      img.src = imgBase + '/' + raw.replace(/^\.\//, '')
+    }
+  })
+  tmp.querySelectorAll('a').forEach((a) => {
+    const raw = a.getAttribute('href') || ''
+    if (linkBase && raw && !/^(https?:|#|mailto:|\/)/i.test(raw)) {
+      a.href = linkBase + '/' + raw.replace(/^\.\//, '')
+    }
+  })
   return tmp.innerHTML
 }
 
@@ -350,7 +361,9 @@ async function openDetail(owner, name) {
   }
   readmeOrig = rm.status === 'fulfilled' ? rm.value.content : ''
   if (rm.status === 'fulfilled') {
-    $('d-body').innerHTML = md(rm.value.content)
+    const imgBase = `https://raw.githubusercontent.com/${owner}/${name}/HEAD`
+    const linkBase = `https://github.com/${owner}/${name}/blob/HEAD`
+    $('d-body').innerHTML = md(rm.value.content, imgBase, linkBase)
   } else {
     const msg = rm.reason?.message || ''
     const isNet = String(msg).includes('Failed to fetch') || String(msg).includes('NetworkError')
