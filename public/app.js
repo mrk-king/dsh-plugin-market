@@ -320,7 +320,9 @@ async function doAction(act, owner, name) {
   try {
     const r = await api(`/api/${act}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner, repo: name }) })
     if (act === 'install') {
-      toastMsg(`已安装为 ${r.kind}：${r.id}，重启 Harness 后可用`)
+      const list = r.installed || [{ kind: r.kind, id: r.id }]
+      const names = list.map((x) => `${x.kind}「${x.id}」`).join('、')
+      toastMsg(`已安装 ${list.length} 个：${names}，重启 Harness 后可用`)
       await loadInstalled()
       loadPlugins(st.q)
     } else {

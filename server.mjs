@@ -12,7 +12,7 @@
  */
 import http from 'node:http'
 import { promises as fs, createReadStream, existsSync } from 'node:fs'
-import { join, normalize, dirname } from 'node:path'
+import { join, normalize, dirname, basename } from 'node:path'
 import { exec as execCb, execFile as execFileCb } from 'node:child_process'
 import { promisify } from 'node:util'
 import crypto from 'node:crypto'
@@ -327,22 +327,46 @@ async function ensureCloned(owner, repo) {
   return { dir, action: 'cloned' }
 }
 
-async function classifyLocal(dir) {
-  const list = async (d) => { try { return await fs.readdir(d) } catch { return [] } }
-  const root = await list(dir)
-  const presetSub = await list(join(dir, 'preset'))
-  if (root.includes('agent.cordis.yml')) return { type: 'preset', presetRoot: dir }
-  if (presetSub.includes('agent.cordis.yml')) return { type: 'preset', presetRoot: join(dir, 'preset') }
-  if (root.includes('SKILL.md')) {
+/** 递归扫描 DSH 插件标记（agent.cordis.yml / SKILL.md），支持"合集型"仓库
+ *  （技能/预设放在子目录，如 skills/<名>/SKILL.md、.claude/skills/<名>/SKILL.md、
+ *   plugins/<名>/agent.cordis.yml）。跳过 .git 与常见非插件目录。 */
+const SCAN_SKIP = new Set(['.git', 'node_modules', 'dist', 'build', '.github', 'docs', 'assets', 'images', 'test', 'tests', 'vendor', '__pycache__', 'lib', 'src'])
+
+async function findPluginMarkers(dir, depth = 0, found = { presets: [], skills: [] }) {
+  if (depth > 3) return found
+  let entries
+  try { entries = await fs.readdir(dir, { withFileTypes: true }) } catch { return found }
+  for (const e of entries) {
+    const full = join(dir, e.name)
+    if (e.isDirectory()) {
+      if (SCAN_SKIP.has(e.name)) continue
+      await findPluginMarkers(full, depth + 1, found)
+    } else if (e.isFile()) {
+      if (e.name === 'agent.cordis.yml') found.presets.push(dirname(full))
+      else if (e.name === 'SKILL.md') found.skills.push(dirname(full))
+    }
+  }
+  return found
+}
+
+/** 从 SKILL.md frontmatter 读取技能名 */
+async function skillNameFrom(dir) {
+  try {
     const content = await fs.readFile(join(dir, 'SKILL.md'), 'utf8')
     const m = /^---\s*\n([\s\S]*?)\n---/.exec(content)
-    let name = ''
     if (m) {
       const nm = /^name:\s*(\S+)\s*$/m.exec(m[1])
-      if (nm) name = nm[1].trim()
+      if (nm) return nm[1].trim()
     }
-    return { type: 'skill', skillName: name }
-  }
+  } catch {}
+  return ''
+}
+
+/** 旧接口兼容：单根识别（保留给测试/其他调用） */
+async function classifyLocal(dir) {
+  const { presets, skills } = await findPluginMarkers(dir)
+  if (presets.length) return { type: 'preset', presetRoot: presets[0], count: presets.length }
+  if (skills.length) return { type: 'skill', skillName: await skillNameFrom(skills[0]), count: skills.length }
   return { type: 'other' }
 }
 
@@ -355,34 +379,45 @@ const toId = (raw, kind) => {
 
 async function installPreset(owner, repo) {
   const { dir } = await ensureCloned(owner, repo)
-  const { type, presetRoot, skillName } = await classifyLocal(dir)
-  if (type === 'preset') {
-    const id = toId(repo, 'preset')
+  const { presets, skills } = await findPluginMarkers(dir)
+  const installed = []
+  const conflicts = []
+  const rootIsPreset = presets.includes(dir)
+  const seenIds = new Set()
+
+  // 预设：整个仓库就是一个预设时 id 用仓库名；合集时每个目录一个预设（按 id 去重）
+  const presetDirs = rootIsPreset ? [dir] : presets
+  for (const p of presetDirs) {
+    const id = rootIsPreset && p === dir
+      ? toId(repo, 'preset')
+      : toId(basename(p), 'preset')
+    if (seenIds.has(id)) continue
+    seenIds.add(id)
     const target = join(DSH_HOME, '.agent-presets', id)
-    if (existsSync(target)) {
-      const err = new Error(`预设 id "${id}" 已存在（${target}）。先卸载或删除再重试。`)
-      err.status = 409
-      throw err
-    }
+    if (existsSync(target)) { conflicts.push(`预设 ${id} 已存在`); continue }
     await fs.mkdir(join(DSH_HOME, '.agent-presets'), { recursive: true })
-    await fs.cp(presetRoot, target, { recursive: true })
-    return { ok: true, kind: 'preset', id, target, files: (await fs.readdir(target)).length }
+    await fs.cp(p, target, { recursive: true })
+    installed.push({ kind: 'preset', id, target, files: (await fs.readdir(target)).length })
   }
-  if (type === 'skill') {
-    const id = toId(skillName || repo, 'skill')
+  for (const s of skills) {
+    const name = await skillNameFrom(s)
+    const id = toId(name || basename(s), 'skill')
+    if (seenIds.has(id)) continue
+    seenIds.add(id)
     const target = join(DSH_HOME, 'skills', id)
-    if (existsSync(target)) {
-      const err = new Error(`技能 "${id}" 已存在（${target}）。先卸载或删除再重试。`)
-      err.status = 409
-      throw err
-    }
+    if (existsSync(target)) { conflicts.push(`技能 ${id} 已存在`); continue }
     await fs.mkdir(join(DSH_HOME, 'skills'), { recursive: true })
-    await fs.cp(dir, target, { recursive: true })
-    return { ok: true, kind: 'skill', id, target }
+    await fs.cp(s, target, { recursive: true })
+    installed.push({ kind: 'skill', id, target })
   }
-  const err = new Error('该仓库不是 DSH 预设也不是技能，已下载但无法自动安装。')
-  err.status = 422
-  throw err
+  if (!installed.length) {
+    const err = new Error(conflicts.length
+      ? `全部已存在：${conflicts.join('；')}。先卸载或删除再重试。`
+      : '该仓库未发现 DSH 预设（agent.cordis.yml）或技能（SKILL.md），已下载但无法自动安装。')
+    err.status = conflicts.length ? 409 : 422
+    throw err
+  }
+  return { ok: true, installed, conflicts }
 }
 
 /** 已安装清单：扫描 ~/.dsh/.agent-presets 与 ~/.dsh/skills */
