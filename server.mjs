@@ -64,7 +64,7 @@ async function ghFetch(url, { ttlNs = 'misc', ttlMs = 600000, noCache = false } 
     const hit = await cacheGet(ttlNs, key, ttlMs)
     if (hit !== null) return hit
   }
-  const res = await fetch(url, { headers: ghHeaders })
+  const res = await fetch(url, { headers: ghHeaders, signal: AbortSignal.timeout(NET_TIMEOUT) })
   if (res.status === 403 || res.status === 429) {
     const err = new Error(`GitHub API 限流（HTTP ${res.status}）。稍后再试，或设置 GITHUB_TOKEN 提高额度。`)
     err.status = res.status
@@ -148,6 +148,9 @@ async function repoInfo(owner, repo) {
   }
 }
 
+/** 网络请求统一超时（避免 GitHub 挂起时连接卡死导致浏览器 Failed to fetch） */
+const NET_TIMEOUT = 15000
+
 async function readme(owner, repo) {
   const key = `${owner}__${repo}`
   const hit = await cacheGet('readme', key, 24 * 60 * 60 * 1000)
@@ -155,6 +158,7 @@ async function readme(owner, repo) {
   try {
     const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {
       headers: { ...ghHeaders, Accept: 'application/vnd.github.raw+json' },
+      signal: AbortSignal.timeout(NET_TIMEOUT),
     })
     if (res.ok) {
       const v = { content: await res.text(), source: 'github-readme' }
@@ -165,7 +169,9 @@ async function readme(owner, repo) {
   for (const branch of ['HEAD', 'main', 'master']) {
     for (const name of ['README.md', 'readme.md', 'README.zh-CN.md', 'README.zh.md']) {
       try {
-        const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${name}`)
+        const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${name}`, {
+          signal: AbortSignal.timeout(NET_TIMEOUT),
+        })
         if (res.ok) {
           const v = { content: await res.text(), source: `raw:${branch}/${name}` }
           await cacheSet('readme', key, v)
@@ -184,7 +190,10 @@ async function classifyRemote(owner, repo) {
   const probe = async (path) => {
     for (const branch of ['HEAD', 'main', 'master']) {
       try {
-        const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`, { method: 'HEAD' })
+        const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(NET_TIMEOUT),
+        })
         if (res.ok) return true
       } catch {}
     }
@@ -209,13 +218,13 @@ async function translateText(text, target = 'zh-CN') {
   let out = ''
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`
-    const res = await fetch(url, { headers: { 'User-Agent': UA } })
+    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(NET_TIMEOUT) })
     if (!res.ok) throw new Error('google fail')
     const data = await res.json()
     out = (data[0] || []).map((seg) => seg[0]).join('')
   } catch {
     try {
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${encodeURIComponent(target)}`)
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=auto|${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(NET_TIMEOUT) })
       if (!res.ok) throw new Error('mymemory fail')
       const data = await res.json()
       out = data?.responseData?.translatedText || ''
@@ -427,6 +436,7 @@ async function harnessRpc(method, payload) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'client-request', rpcId: uuid(), method, payload }),
+    signal: AbortSignal.timeout(20000),
   })
   if (!res.ok) {
     const err = new Error(`Harness HTTP ${res.status}`)
@@ -667,6 +677,7 @@ const server = http.createServer(async (req, res) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(envelope),
+        signal: AbortSignal.timeout(15000),
       })
       const out = await res2.json().catch(() => ({}))
       return send(res, res2.ok && out.accepted !== false ? 200 : 502, out)
@@ -695,6 +706,20 @@ const server = http.createServer(async (req, res) => {
 // 直接运行时才启动服务（被测试/导入时不监听端口）
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href
 if (isMain) {
+  // 进程级兜底：任何未捕获异常/拒绝都记录到 stderr，便于定位"连接被重置"类问题
+  process.on('uncaughtException', (err) => {
+    console.error('[market] uncaughtException:', err)
+  })
+  process.on('unhandledRejection', (err) => {
+    console.error('[market] unhandledRejection:', err)
+  })
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n  ❌ 端口 ${PORT} 已被占用——可能已有市场服务在运行，或残留了旧进程。\n     请先结束占用该端口的 node 进程，再启动本服务。\n`)
+      process.exit(1)
+    }
+    console.error('[market] server error:', err)
+  })
   server.listen(PORT, HOST, () => {
     console.log(`\n  🧩 DSH 插件市场 v3 已启动`)
     console.log(`  地址:        http://${HOST}:${PORT}`)

@@ -397,9 +397,16 @@ async function openDetail(owner, name) {
     $('d-kind').textContent = cls.value.type === 'preset' ? '可安装：agent preset' : '可安装：skill'
   }
   readmeOrig = rm.status === 'fulfilled' ? rm.value.content : ''
-  $('d-body').innerHTML = rm.status === 'fulfilled'
-    ? md(rm.value.content)
-    : `<div class="empty"><p>README 加载失败：${esc(rm.reason?.message || '')}</p></div>`
+  if (rm.status === 'fulfilled') {
+    $('d-body').innerHTML = md(rm.value.content)
+  } else {
+    const msg = rm.reason?.message || ''
+    const isNet = String(msg).includes('Failed to fetch') || String(msg).includes('NetworkError')
+    $('d-body').innerHTML = isNet
+      ? `<div class="empty"><h3>连接市场服务失败</h3><p>与服务端的连接中断（${esc(msg)}）。市场服务可能正在重启或已停止，请确认服务在运行后刷新页面重试。</p><button class="btn ink" id="d-retry">重试</button></div>`
+      : `<div class="empty"><p>README 加载失败：${esc(msg)}</p></div>`
+    $('d-retry')?.addEventListener('click', () => openDetail(owner, name))
+  }
 }
 $('d-translate').onclick = async () => {
   if (!readmeOrig) return
