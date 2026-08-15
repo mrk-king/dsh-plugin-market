@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DSH 插件市场
+Name[en]=DSH Plugin Market
+Comment=浏览 GitHub 上的 DeepSeek Harness 插件：看介绍、下载、一键安装、对话筛选
+Comment[en]=Browse DeepSeek Harness plugins on GitHub
+Exec=/home/mrk/Documents/ds-workspace/plugin-market/start-market.sh
+Icon=/home/mrk/Documents/ds-workspace/plugin-market/icons/dsh-market.svg
+Terminal=false
+Categories=Development;Network;Utility;
+Keywords=dsh;deepseek;plugin;market;
+StartupNotify=true

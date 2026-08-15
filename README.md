@@ -43,6 +43,22 @@ node --experimental-websocket server.mjs
 
 打开 <http://127.0.0.1:3399>。
 
+## 桌面快捷方式（三平台）
+
+双击快捷方式 = 服务未运行则自动后台启动 + 打开浏览器页面。
+
+| 平台 | 安装方式 | 快捷方式形态 |
+|---|---|---|
+| **Linux** | `tools/install-linux.sh` | 桌面 + 应用菜单的「DSH 插件市场」（.desktop） |
+| **Windows** | 右键 `tools/install-windows.ps1` → "使用 PowerShell 运行" | 桌面「DSH 插件市场.lnk」（含图标，指向 `start-market.bat`） |
+| **macOS** | `tools/install-macos.sh` | 桌面「DSH 插件市场.command」，双击在终端运行 |
+
+说明：
+
+- Windows 的 `start-market.bat` 也可直接双击使用（不装快捷方式也行）；首次使用会检查 Node.js 是否已安装
+- macOS 的 `.command` 由安装脚本写入实际项目路径，移动项目目录后重新运行安装脚本即可
+- Linux 若桌面不显示图标（部分 GNOME 发行版默认关闭桌面图标），可用 Super 键搜索「DSH」，或从文件管理器的"桌面"文件夹双击
+
 ### 环境变量
 
 | 变量 | 作用 | 默认 |
