@@ -1,0 +1,34 @@
+{
+  "name": "dsh-plugin-market",
+  "version": "3.0.0",
+  "private": false,
+  "type": "module",
+  "description": "本地 DeepSeek Harness 插件市场：浏览 GitHub 社区插件（限定 DSH 或全库可切）、中文翻译、一键下载/安装/组合安装、直连本地 Harness 的对话筛选。",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "plugin-market",
+    "marketplace",
+    "agent",
+    "ui"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "dsh-plugin-market": "server.mjs"
+  },
+  "scripts": {
+    "start": "node --experimental-websocket server.mjs",
+    "test": "node --test tests/"
+  },
+  "files": [
+    "server.mjs",
+    "public/",
+    "start.sh",
+    "README.md",
+    "LICENSE"
+  ]
+}

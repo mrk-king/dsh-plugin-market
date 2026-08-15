@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="本地 DeepSeek Harness 插件市场：浏览 GitHub 社区插件、查看中文介绍、一键下载安装、对话智能筛选。" />
+  <title>DSH 插件市场</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23A4573B'/%3E%3Cpath d='M10 13h12M10 17h12M10 21h8' stroke='%23FAF6EF' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:ital,wght@0,400..700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body><!-- IMPECCABLE CONTRACT seed=user-pinned-editorial
+  THESIS: 一个本地插件市场的编辑化门面——工具页面读起来像一份印刷目录；拒绝的默认是同尺寸图标卡片墙与蓝紫渐变。
+  OWN-WORLD: 暖奶油纸面（#FAF6EF）叠细噪点；咖啡墨（#2B241D）；单一赤陶强调色（#A4573B）；标题高对比衬线 Fraunces，正文 Instrument Sans，数据 JetBrains Mono/表格数字；双层嵌套卡片（外壳细线、内芯纸白、内顶高光），圆角 16/12；1.5px 等宽线条图标；阴影带偏移并染纸色。
+  STORY: 访客一眼知道这是逛 GitHub 上 DeepSeek Harness 插件的地方；看介绍、装插件、交给 Harness 智能体筛选，都在同一页完成。
+  FIRST VIEWPORT: 顶部浮动的圆角工具条（品牌 + 搜索 + 对话筛选/已安装）；下方左对齐衬线大标题与一句说明，再下是"上次更新/自动刷新"一行小字；首屏以一张 2×2 衬线大字开场的精选插件卡开始，其余卡片按星标网格错峰浮现。
+  FORM: 用户指定 Editorial Luxury（暖白编辑风）；brief 固定方向优先，未掷骰。
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+  -->
+
+  <div class="grain" aria-hidden="true"></div>
+  <a class="skip-link" href="#grid">跳到插件列表</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 12.5h12M10 16.5h12M10 20.5h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>
+        <span class="brand-name">DSH 插件市场</span>
+      </div>
+      <form class="search" id="search-form">
+        <svg class="s-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M15.5 15.5 20 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+        <input id="search" type="search" placeholder="在 DSH 插件范围内搜索，如 minimal、技能、windows" />
+        <button type="submit" class="btn ink">搜索</button>
+      </form>
+      <div class="scope-toggle" role="radiogroup" aria-label="搜索范围">
+        <button type="button" class="scope-btn active" data-scope="dsh" aria-pressed="true">DSH 插件</button>
+        <button type="button" class="scope-btn" data-scope="all" aria-pressed="false">全 GitHub</button>
+      </div>
+      <div class="top-actions">
+        <button id="chat-toggle" class="btn ghost">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4.5 3.5L5 16H6a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          对话筛选
+        </button>
+        <button id="installed-toggle" class="btn ghost">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 20 7.5v9L12 20.5 4 16.5v-9Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 7.5 12 11.5 20 7.5M12 11.5v9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          已安装
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="masthead">
+      <h1>把好用的插件，<br />装进你的 Harness。</h1>
+      <p class="lede">浏览 GitHub 上 DeepSeek Harness 社区插件，介绍自动翻译成中文，一键安装成预设或技能；拿不准装什么，就把需求说给 Harness 听。</p>
+      <div class="masthead-meta">
+        <span id="data-note">仅浏览 DSH 插件（GitHub 标签 topic:dsh-plugin）· 按星标排序 · API 最多返回 1000 条</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span id="last-updated">尚未更新</span>
+        <span class="dot" aria-hidden="true"></span>
+        <button id="refresh-now" class="textbtn">立即刷新</button>
+        <span class="dot" aria-hidden="true"></span>
+        <label class="auto-refresh"><input type="checkbox" id="auto-refresh" checked /> 每 5 分钟自动刷新 <span id="countdown"></span></label>
+      </div>
+    </section>
+
+    <div id="cart-bar" class="cart-bar hidden">
+      <span id="cart-info">已选 0 个插件</span>
+      <button id="cart-install" class="btn accent">批量安装所选</button>
+      <button id="cart-clear" class="textbtn">清空</button>
+    </div>
+
+    <p id="status" class="status" aria-live="polite"></p>
+
+    <section id="grid" class="grid"></section>
+    <div id="sentinel" aria-hidden="true"></div>
+    <div class="loadmore-row">
+      <button id="load-more" class="btn ink hidden">加载更多</button>
+    </div>
+
+    <footer class="footer">
+      本页是本地工具，数据与插件来自 GitHub 与 DeepSeek Harness 社区；安装仅写入 <code>~/.dsh</code>。
+    </footer>
+  </main>
+
+  <!-- 详情 -->
+  <section id="detail" class="overlay hidden" role="dialog" aria-modal="true" aria-label="插件详情">
+    <div class="overlay-head">
+      <div class="overlay-title">
+        <h2 id="d-title"></h2>
+        <p id="d-meta" class="meta"></p>
+      </div>
+      <button id="d-close" class="btn ghost" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+    <div class="overlay-actions">
+      <button id="d-download" class="btn ink">下载</button>
+      <button id="d-install" class="btn accent">一键安装</button>
+      <button id="d-translate" class="btn ghost">中文翻译</button>
+      <a id="d-github" class="btn ghost" target="_blank" rel="noopener">在 GitHub 打开</a>
+      <span id="d-kind" class="kind-badge"></span>
+    </div>
+    <div id="d-body" class="overlay-body"></div>
+  </section>
+
+  <!-- 对话筛选 -->
+  <section id="chat" class="side hidden" role="dialog" aria-modal="false" aria-label="对话筛选">
+    <div class="side-head">
+      <div>
+        <h2>对话筛选</h2>
+        <p id="chat-status" class="meta">正在连接本地 Harness…</p>
+      </div>
+      <button id="chat-close" class="btn ghost" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+    <div id="chat-chips" class="chat-chips">
+      <button class="chip-btn" data-q="帮我找一个 Windows 上极简模式的 agent preset">Windows 极简 preset</button>
+      <button class="chip-btn" data-q="推荐几个技能类（skill）插件">技能类插件</button>
+      <button class="chip-btn" data-q="最热门的插件有哪些？">最热门插件</button>
+      <button class="chip-btn" data-q="帮我找带 Git Bash 工具的预设">Git Bash 预设</button>
+    </div>
+    <div id="chat-msgs" class="chat-msgs"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" placeholder="用中文描述你的需求" />
+      <button id="chat-send" class="btn ink">发送</button>
+    </div>
+  </section>
+
+  <!-- 已安装 -->
+  <section id="installed" class="overlay hidden" role="dialog" aria-modal="true" aria-label="已安装插件">
+    <div class="overlay-head">
+      <div class="overlay-title">
+        <h2>本机已安装</h2>
+        <p id="installed-meta" class="meta"></p>
+      </div>
+      <button id="installed-close" class="btn ghost" aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+    <div id="installed-body"></div>
+  </section>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
