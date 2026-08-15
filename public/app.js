@@ -47,67 +47,19 @@ async function api(path, opts) {
 }
 const fmtTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false })
 
-/* ── Markdown 渲染 ──────────────────────────────────────────────────── */
-function mdInline(s) {
-  s = esc(s)
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>')
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2" loading="lazy" />')
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>')
-  return s
-}
+/* ── Markdown 渲染(marked + DOMPurify)─────────────────────────────────
+   手写迷你渲染器会转义 README 中的原生 HTML(如 <h1>/<table>/<img>),
+   导致 HTML 风格 README 显示成源码墙。改用标准渲染器:
+   marked 负责 GFM + HTML 透传,DOMPurify 负责消毒(README 来自第三方,
+   必须 sanitize 后再进 innerHTML)。输出保持与旧渲染器相同的语义标签。 */
 function md(src) {
   if (!src) return '<p class="empty">无内容</p>'
-  const lines = src.split('\n')
-  let html = '', inCode = false, codeBuf = [], inList = false, listType = '', para = [], inTable = false, tableBuf = []
-  const flushPara = () => { if (para.length) { html += `<p>${mdInline(para.join(' '))}</p>`; para = [] } }
-  const flushList = () => { if (inList) { html += `</${listType}>`; inList = false } }
-  const flushTable = () => {
-    if (inTable) {
-      const cells = (r) => r.split('|').slice(1, -1).map((c) => c.trim())
-      const [head, ...rows] = tableBuf.filter((r) => r.trim() && !/^\|[\s:|-]+\|$/.test(r))
-      html += '<table><thead><tr>' + cells(head).map((c) => `<th>${mdInline(c)}</th>`).join('') + '</tr></thead><tbody>'
-        + rows.map((r) => '<tr>' + cells(r).map((c) => `<td>${mdInline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table>'
-      inTable = false; tableBuf = []
-    }
-  }
-  for (const line of lines) {
-    const t = line.trim()
-    if (t.startsWith('```')) {
-      if (inCode) { html += `<pre><code>${esc(codeBuf.join('\n'))}</code></pre>`; codeBuf = []; inCode = false }
-      else { flushPara(); flushList(); flushTable(); inCode = true }
-      continue
-    }
-    if (inCode) { codeBuf.push(line); continue }
-    if (/^\|.*\|\s*$/.test(t)) {
-      if (/^\|[\s:|-]+\|\s*$/.test(t) && !inTable) { inTable = true; tableBuf.push(t); continue }
-      if (inTable) { tableBuf.push(t); continue }
-    }
-    if (inTable) flushTable()
-    if (/^#{1,6}\s/.test(t)) {
-      flushPara(); flushList()
-      const m = /^(#+)\s+(.*)$/.exec(t)
-      html += `<h${m[1].length}>${mdInline(m[2])}</h${m[1].length}>`
-      continue
-    }
-    if (/^>\s?/.test(t)) { flushPara(); flushList(); html += `<blockquote>${mdInline(t.replace(/^>\s?/, ''))}</blockquote>`; continue }
-    if (/^([-*+]|\d+[.)])\s+/.test(t)) {
-      flushPara()
-      const m = /^([-*+]|\d+[.)])\s+(.*)$/.exec(t)
-      const type = /^\d/.test(m[1]) ? 'ol' : 'ul'
-      if (!inList || listType !== type) { if (inList) flushList(); html += `<${type}>`; inList = true; listType = type }
-      html += `<li>${mdInline(m[2])}</li>`
-      continue
-    }
-    if (/^(-{3,}|\*{3,})$/.test(t)) { flushPara(); flushList(); html += '<hr>'; continue }
-    if (t === '') { flushPara(); flushList(); flushTable(); continue }
-    flushList(); flushTable()
-    para.push(t)
-  }
-  if (inCode) html += `<pre><code>${esc(codeBuf.join('\n'))}</code></pre>`
-  flushPara(); flushList(); flushTable()
-  return html
+  const html = marked.parse(src, { gfm: true })
+  const safe = DOMPurify.sanitize(html)
+  const tmp = document.createElement('div')
+  tmp.innerHTML = safe
+  tmp.querySelectorAll('img').forEach((img) => { img.loading = 'lazy' })
+  return tmp.innerHTML
 }
 
 /* ── 骨架屏与空态 ───────────────────────────────────────────────────── */
@@ -257,7 +209,7 @@ function cardHtml(r, i) {
       <div class="card-top">
         <img src="https://github.com/${esc(r.owner)}.png?size=64" alt="${esc(r.owner)} 的头像" loading="lazy" onerror="this.style.visibility='hidden'" />
         <div>
-          <h3><a href="${esc(r.html_url)}" target="_blank" rel="noopener">${esc(r.name)}</a></h3>
+          <h3><span class="repo-name">${esc(r.name)}</span></h3>
           <span class="owner">${esc(r.owner)}</span>
         </div>
       </div>
